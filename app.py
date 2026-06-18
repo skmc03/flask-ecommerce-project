@@ -269,74 +269,66 @@ def deleteitem(itemid):
         return redirect(url_for('viewallitems'))
     flash('item deleted successfully')
     return redirect(url_for('viewallitems'))
-@app.route('/updateitem/<itemid>',methods=['GET','POST'])
+@app.route('/updateitem/<itemid>', methods=['GET', 'POST'])
 def updateitem(itemid):
     if not session.get('admin'):
-        flash('To access dashboard pls Login')
+        flash('To access dashboard please login')
         return redirect(url_for('adminlogin'))
     try:
-        cursor=mydb.cursor(buffered=True)
+        cursor = mydb.cursor(buffered=True)
         cursor.execute('select adminid from admindata where admin_useremail=%s',[session.get('admin')])
-        added_by=cursor.fetchone()
-        if added_by:
-            cursor.execute('select bin_to_uuid(itemid),item_name,item_description,item_about,item_price,item_quantity,item_category,item_filename from items where added_by=%s and itemid=uuid_to_bin(%s)',[added_by[0],itemid])
-            itemdata=cursor.fetchone()
-            cursor.close()
-        else:
-            flash('user not found')
+        added_by = cursor.fetchone()
+        if not added_by:
+            flash('User not found')
             return redirect(url_for('admindashboard'))
+        cursor.execute('''select bin_to_uuid(itemid),item_name,item_description,item_about,item_price,item_quantity,item_category,item_filename from items where added_by=%s and itemid=uuid_to_bin(%s)''',[added_by[0], itemid])
+        itemdata = cursor.fetchone()
+        cursor.close()
+        if not itemdata:
+            flash('Item not found')
+            return redirect(url_for('viewallitems'))
     except Exception as e:
-            print(e)
-            flash('Could not fetch item details')
-            return redirect(url_for('admindashboard'))
-    else:
-        if request.method=='POST':
-            updateditem_name=request.form['title']
-            updateditem_description=request.form['Description']
-            updateditem_about=request.form['About_item']
-            updateditem_quantity=request.form['quantity']
-            updateditem_price=request.form['price']
-            updateditem_category=request.form['category']
-            updateditem_imagedata=request.files['file']
-            updatedimagename=updateditem_imagedata.filename
-            print(updatedimagename)
-            print(request.form)
-            if updatedimagename=='':
-                filename = itemdata[7]
-            else:
-                if updateditem_imagedata and updatedimagename:
-                    if not allowed_file(updatedimagename):
-                        flash('File type is not allowed. pls give png,jpg,jpeg,gif,webp')
-                        return redirect(url_for('updateitem',itemid=itemid))
-                    orig_secure=secure_filename(updatedimagename)
-                    ext=os.path.splitext(orig_secure)[1]
-                    filename=genotp()+ext
-                    save_path=os.path.join(app.config['UPLOAD_FOLDER'],filename)
-                    try:
-                        updateditem_imagedata.save(save_path)
-                        '''if itemdata[7]:
-                            remove_path=os.path.join(app.config['UPLOAD_FOLDER'],itemdata[7])
-                            os.remove(remove_path)'''
-                    except Exception as e:
-                        print(e)
-                        flash('Could not save file data')
-                        return redirect(url_for('updateitem',itemid=itemid)) 
+        print(e)
+        flash('Could not fetch item details')
+        return redirect(url_for('admindashboard'))
+    if request.method == 'POST':
+        updateditem_name = request.form['title']
+        updateditem_description = request.form['Description']
+        updateditem_about = request.form['About_item']
+        updateditem_quantity = request.form['quantity']
+        updateditem_price = request.form['price']
+        updateditem_category = request.form['category']
+        updateditem_imagedata = request.files['file']
+        updatedimagename = updateditem_imagedata.filename
+        filename = itemdata[7]
+        if updatedimagename:
+            if not allowed_file(updatedimagename):
+                flash('File type not allowed')
+                return redirect(url_for('updateitem', itemid=itemid))
+            orig_secure = secure_filename(updatedimagename)
+            ext = os.path.splitext(orig_secure)[1]
+            filename = genotp() + ext
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'],filename)
             try:
-                cursor=mydb.cursor(buffered=True)
-                cursor.execute('select adminid from admindata where admin_useremail=%s',[session.get('admin')])
-                added_by=cursor.fetchone()
-                if added_by:
-                    cursor.execute('update items set item_name=%s,item_description=%s,item_about=%s,item_price=%s,item_quantity=%s,item_category=%s,item_filename=%s where added_by=%s and itemid=uuid_to_bin(%s)',[updateditem_name,updateditem_description,updateditem_about,updateditem_price,updateditem_quantity,updateditem_category,filename,added_by[0],itemid])
-                    mydb.commit()
-                    cursor.close()
+                updateditem_imagedata.save(save_path)
             except Exception as e:
                 print(e)
-                flash('Could not store item details')
-
-                if 'save_path' in locals() and os.path.exists(save_path):
-                    os.remove(save_path)
-
-                return redirect(url_for('updateitem',itemid=itemid))
+                flash('Could not save image')
+                return redirect(url_for('updateitem', itemid=itemid))
+        try:
+            cursor = mydb.cursor(buffered=True)
+            cursor.execute('''update items set item_name=%s,item_description=%s,item_about=%s,item_price=%s,item_quantity=%s,item_category=%s,item_filename=%s where added_by=%sand itemid=uuid_to_bin(%s)''',[updateditem_name,updateditem_description,updateditem_about,updateditem_price,updateditem_quantity,updateditem_category,filename,added_by[0],itemid])
+            mydb.commit()
+            cursor.close()
+        except Exception as e:
+            print(e)
+            if 'save_path' in locals() and os.path.exists(save_path):
+                os.remove(save_path)
+            flash('Could not update item')
+            return redirect(url_for('updateitem', itemid=itemid))
+        flash('Item updated successfully')
+        return redirect(url_for('viewallitems'))
+    return render_template('updateitem.html',itemdata=itemdata)
 @app.route('/adminupdateprofile',methods=['GET','POST'])
 def adminprofileupdate():
     if not session.get('admin'):
@@ -464,7 +456,7 @@ def userlogin():
                             session[login_email]={}#cart items stored
                         return redirect(url_for('home'))
                     else:
-                        flash('password was arong')
+                        flash('password is wrong')
                         return redirect(url_for('userlogin'))
                 elif count_email[0]==0:
                     flash('No email found')
@@ -957,9 +949,47 @@ def adminsearch():
         cursor.execute('''select bin_to_uuid(itemid),item_name,item_description,item_about,item_price,item_quantity,item_category,item_filename from items where item_name like %s or item_description like %s or item_about like %s or item_category like %s''',[f'%{searchdata}%',f'%{searchdata}%',f'%{searchdata}%',f'%{searchdata}%'])
         allitemsdata = cursor.fetchall()
         cursor.close()
-        return render_template('viewall_items.html',           allitemsdata=allitemsdata)
+        return render_template('viewall_items.html',allitemsdata=allitemsdata)
     except Exception as e:
         print(e)
         flash('Search failed')
         return redirect(url_for('viewallitems'))
+@app.route('/adminforgotpassword', methods=['GET', 'POST'])
+def adminforgotpassword():
+    if request.method == 'POST':
+        forgot_email = request.form['forgot_email']
+        try:
+            cursor = mydb.cursor(buffered=True)
+            cursor.execute('select count(*) from admindata where admin_useremail=%s',[forgot_email])
+            count_email = cursor.fetchone()[0]
+            if count_email == 1:
+                subject = "Admin Password Reset"
+                body = f"Reset Link : {url_for('adminnewpassword', data=endata(forgot_email), _external=True)}"
+                sendmail(to=forgot_email,subject=subject,body=body)
+                flash('Reset link sent successfully')
+                return redirect(url_for('adminforgotpassword'))
+            else:
+                flash('Email not found')
+                return redirect(url_for('adminforgotpassword'))
+        except Exception as e:
+            print(e)
+            flash('Could not send reset link')
+            return redirect(url_for('adminforgotpassword'))
+    return render_template('adminforgotpwd.html')
+@app.route('/adminnewpassword/<data>', methods=['GET', 'POST'])
+def adminnewpassword(data):
+    if request.method == 'POST':
+        try:
+            admin_email = dndata(data)
+            new_password = request.get_json()['new_password']
+            hash_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+            cursor = mydb.cursor(buffered=True)
+            cursor.execute('''update admindata set admin_password=%s where admin_useremail=%s''',[hash_password, admin_email])
+            mydb.commit()
+            cursor.close()
+            return jsonify({"message": "Password updated successfully"})
+        except Exception as e:
+            print(e)
+            return jsonify({"message": "Password update failed"})
+    return render_template('adminnewpassword.html', data=data)
 app.run(debug=True,use_reloader=True)
