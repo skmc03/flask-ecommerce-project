@@ -94,7 +94,7 @@
                         <form method="post" action="{{url_for('buy_now')}}">
                             <input type="hidden" name="itemid" value="{{i[0]}}">
                             <label class="mt-2"><strong>Select Quantity</strong></label>
-                            <select name="qyt" class="form-select quantity">
+                            <select name="quantity" class="form-select quantity">
                                 {% for q in range(1, 11) %}
                                 <option value="{{ q }}">{{ q }}</option>
                                 {% endfor %}

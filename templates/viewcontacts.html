@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title>Contact Messages</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="container mt-5">
+
+```
+<h2 class="mb-4">Contact Messages</h2>
+
+<a href="{{url_for('admindashboard')}}" class="btn btn-secondary mb-3">
+    Back
+</a>
+
+<table class="table table-bordered table-striped">
+
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Subject</th>
+            <th>Message</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+
+    <tbody>
+
+    {% for c in contacts %}
+        <tr>
+            <td>{{c[0]}}</td>
+            <td>{{c[1]}}</td>
+            <td>{{c[2]}}</td>
+            <td>{{c[3]}}</td>
+            <td>{{c[4]}}</td>
+            <td>{{c[5]}}</td>
+        </tr>
+    {% endfor %}
+
+    </tbody>
+
+</table>
+```
+
+</div>
+
+</body>
+</html>

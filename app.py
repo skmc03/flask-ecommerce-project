@@ -105,7 +105,7 @@ def adminlogin():
                         session['admin']=login_email
                         return redirect(url_for('admindashboard'))
                     else:
-                        flash('password was wrong')
+                        flash('password is wrong')
                         return redirect(url_for('adminlogin'))
                 elif count_email[0]==0:
                     flash('No email found')
@@ -126,7 +126,7 @@ def adminlogin():
                     flash('user logged in successfully')
                     return redirect(url_for('dashboard'))
                 else:
-                    flash('Password was wrong')
+                    flash('Password is wrong')
                     return redirect(url_for('adminlogin'))
             else:
                 flash('Enter valid email for login')
@@ -261,7 +261,7 @@ def deleteitem(itemid):
         return redirect(url_for('viewallitems'))
     try:
         filepath=os.path.join(app.config['UPLOAD_FOLDER'],img_name)
-        if filepath:
+        if os.path.exists(filepath):
             os.remove(filepath)
     except Exception as e:
         mydb.rollback()
@@ -437,38 +437,35 @@ def userotpverify(serverdata):
             flash('OTP was wrong ')
             return redirect(url_for('userotpverify',serverdata=serverdata))
     return render_template('userotp.html')
-@app.route('/userlogin',methods=['GET','POST'])
+@app.route('/userlogin', methods=['GET', 'POST'])
 def userlogin():
-    if request.method=='POST':
-        login_email=request.form['email']
-        login_password=request.form['password']
+    if request.method == 'POST':
+        login_email = request.form['email']
+        login_password = request.form['password']
         try:
-            cursor=mydb.cursor(buffered=True)
-            cursor.execute('select count(useremail) from userdata where useremail=%s',[login_email])
-            count_email=cursor.fetchone() #none
-            if count_email:
-                if count_email[0]==1:
-                    cursor.execute('select userpassword from userdata where useremail=%s',[login_email])
-                    stored_password=cursor.fetchone()
-                    if bcrypt.check_password_hash(stored_password[0],login_password):
-                        session['user']=login_email
-                        if not session.get(login_email):
-                            session[login_email]={}#cart items stored
-                        return redirect(url_for('home'))
-                    else:
-                        flash('password is wrong')
-                        return redirect(url_for('userlogin'))
-                elif count_email[0]==0:
-                    flash('No email found')
+            cursor = mydb.cursor(buffered=True)
+            cursor.execute('SELECT userpassword FROM userdata WHERE useremail=%s LIMIT 1',
+                [login_email])
+            stored_password = cursor.fetchone()
+            print("EMAIL:", login_email)
+            print("USER FOUND:", stored_password is not None)
+            if stored_password:
+                if bcrypt.check_password_hash(stored_password[0],login_password):
+                    session['user'] = login_email
+                    if login_email not in session:
+                        session[login_email] = {}
+                    flash('Login successful')
+                    return redirect(url_for('home'))
+                else:
+                    flash('Password is wrong')
                     return redirect(url_for('userlogin'))
             else:
-                flash('Could not verify email')
+                flash('No email found')
                 return redirect(url_for('userlogin'))
         except Exception as e:
-            print(e)
-            flash('could not verify userlogin')
+            print("LOGIN ERROR:", e)
+            flash('Could not verify user login')
             return redirect(url_for('userlogin'))
-        
     return render_template('userlogin.html')
 @app.route('/category/<ctype>')
 def category(ctype):
@@ -594,7 +591,7 @@ def paycart():
     try:
         cart=session.get(session.get('user'),{})
         #only use single_buy if explicitly coming from buynow route
-        cart_now=''
+        cart_mode='cart'
         if request.args.get('type')=='single':
             cart=session.get('single_buy',{})
             cart_mode='single'
@@ -707,7 +704,6 @@ def success_cart():
                 if 'single_buy' in session:
                     session.pop('single_buy')
                     session.modified=True
-
             session[session.get('user')]={}
             flash('Order details successfully stored')
             return redirect(url_for('home'))
@@ -792,46 +788,39 @@ def getinvoice(ordid):
         print(e)
         flash('could not get the list of orders')
         return redirect(url_for('home'))
-@app.route('/buy_now',methods=['POST'])
+@app.route('/buy_now', methods=['POST'])
 def buy_now():
-    if not session.get('user'):
-        flash('please login to buy items')
+    if 'user' not in session:
+        flash('Please login first')
         return redirect(url_for('userlogin'))
-    itemid=request.form['itemid']
     try:
-        cursor=mydb.cursor(buffered=True)
-        cursor.execute('''select bin_to_uuid(itemid),item_name,item_description,
-        item_about,item_price,item_quantity,item_category,item_filename 
-        from items where itemid=uuid_to_bin(%s)''',[itemid])
-        item_data=cursor.fetchone()
-        cursor.close()
-    except Exception as e:
-        print(e)
-        flash('Could not fetch the item details')
-        return redirect(url_for('home'))
-    else:
-        session['single_buy']={itemid:[item_data[1],1,item_data[4],item_data[5],item_data[6],item_data[7]]}
-        session.modified=True
-        print(session,'after single buy item added')
-        return redirect(url_for('paycart',type='single'))
-@app.route('/usersearch',methods=['POST'])
-def usersearch():
-    searchdata=request.form['q']
-    pattern = re.compile(r'^[A-Za-z0-9 ]+$')
-    if pattern.match(searchdata):
-        try:
-            cursor=mydb.cursor(buffered=True)
-            cursor.execute('select bin_to_uuid(itemid),item_name,item_description,item_about,item_price,item_quantity,item_category,item_filename from items where item_name like %s or item_description like %s or item_about like %s or item_price like %s or item_quantity like %s or item_category like %s',[searchdata+'%',searchdata+'%',searchdata+'%',searchdata+'%',searchdata+'%',searchdata+'%'])
-            itemsdata=cursor.fetchall()
-            cursor.close()
-        except Exception as e:
-            print(e)
-            flash('Could not fetch the item details')
+        itemid = request.form['itemid']
+        quantity = int(request.form['quantity'])
+        cursor = mydb.cursor(buffered=True)
+        cursor.execute('SELECT * FROM items WHERE itemid=UUID_TO_BIN(%s)',[itemid])
+        item_data = cursor.fetchone()
+        if not item_data:
+            flash('Item not found')
             return redirect(url_for('home'))
-        else:
-            return render_template('dashboard.html',itemsdata=itemsdata)
-    else:
-        flash('Invalid search data')
+        available_stock = int(item_data[5])
+        if quantity < 1:
+            quantity = 1
+        if quantity > available_stock:
+            flash(f'Only {available_stock} items available')
+            return redirect(url_for('descitem', itemid=itemid))
+        session['single_buy'] = {itemid: [item_data[1],      # item_name
+                quantity,          # selected quantity
+                float(item_data[4]), # price
+                item_data[5],      # stock
+                item_data[6],      # category
+                item_data[7]       # image
+            ]
+        }
+        session.modified = True
+        return redirect(url_for('paycart', type='single'))
+    except Exception as e:
+        print("BUY NOW ERROR:", e)
+        flash('Could not process Buy Now')
         return redirect(url_for('home'))
 @app.route('/descitem/<itemid>')
 def descitem(itemid):
@@ -890,54 +879,60 @@ def readreview(itemid):
         print("READ REVIEW ERROR:", e)
         flash("Could not fetch reviews")
         return redirect(url_for('descitem', itemid=itemid))
-@app.route('/userforgotpassword',methods=['GET','POST'])
-def userforgotpassword():
-    if request.method=='POST':
-        forgot_email=request.form['email']
-        try:
-            cursor=mydb.cursor(buffered=True)
-            cursor.execute('select count(*) from userdata where useremail=%s',[forgot_email])
-            count_email=cursor.fetchone()[0]
-            if count_email==1:
-                subject=f"User Reset-link for forgot password"
-                body=f"Reset-link for user forgot password: {url_for('usernewpassword',data=endata(forgot_email),_external=True)}"
-                sendmail(to=forgot_email,subject=subject,body=body)
-                flash('Resetlink has sent to Given mail')
-                return redirect(url_for('userforgotpassword'))
-            elif count_email==0:
-                flash('No Email found pls check')
-                return redirect(url_for('userforgotpassword'))
-        except Exception as e:
-            print(e)
-            flash('Could not sent resetlink')
-            return redirect(url_for('userforgotpassword'))
-    return render_template('userforgot.html')
 @app.route('/usernewpassword/<data>', methods=['GET', 'POST'])
 def usernewpassword(data):
     if request.method == 'POST':
         try:
             forgot_email = dndata(data)
-            print(forgot_email)
-        except Exception as e:
-            print(e)
-            flash('Could not verify the email')
-            return redirect(url_for('usernewpassword', data=data))
-        print(request.get_json())
-        npassword = request.get_json()['new_password']
-        hash_password = bcrypt.generate_password_hash(npassword)
-        try:
+            new_password = request.get_json()['new_password']
+            hash_password = bcrypt.generate_password_hash(new_password)
             cursor = mydb.cursor(buffered=True)
             cursor.execute('update userdata set userpassword=%s where useremail=%s',[hash_password, forgot_email])
             mydb.commit()
             cursor.close()
+            return jsonify({"message": "Password updated successfully"})
+        except Exception as e:
+            print("PASSWORD UPDATE ERROR:", e)
+            return jsonify({"error": "Password update failed"}), 500
+    return render_template('usernewpassword.html', data=data)
+@app.route('/userforgotpassword', methods=['GET', 'POST'])
+def userforgotpassword():
+    if request.method == 'POST':
+        forgot_email = request.form['email']
+        try:
+            cursor = mydb.cursor(buffered=True)
+            cursor.execute(
+                'SELECT * FROM userdata WHERE useremail=%s',
+                [forgot_email])
+            data = cursor.fetchone()
+            if data:
+                reset_link = url_for('usernewpassword',data=endata(forgot_email),_external=True)
+                subject = "User Password Reset"
+                body = f""" Hello, Click the link below to reset your password: {reset_link} If you did not request this password reset, please ignore this email."""
+                sendmail(to=forgot_email,subject=subject,body=body)
+                flash('Reset link has been sent to your email')
+                return redirect(url_for('userforgotpassword'))
+            else:
+                flash('No Email found. Please check.')
+                return redirect(url_for('userforgotpassword'))
         except Exception as e:
             print(e)
-            flash('could not update password')
-            return redirect(url_for('usernewpassword', data=data))
-        else:
-            flash('password updated successfully')
-            return jsonify({"message": "password updated successfully"})
-    return render_template('usernewpassword.html', data=data)
+            flash('Could not send reset link')
+            return redirect(url_for('userforgotpassword'))
+    return render_template('userforgot.html')
+@app.route('/usersearch', methods=['POST'])
+def usersearch():
+    searchdata = request.form['q'].strip()
+    try:
+        cursor = mydb.cursor(buffered=True)
+        cursor.execute('''select bin_to_uuid(itemid),item_name,item_description,item_about,item_price,item_quantity,item_category,item_filename from items where item_name like %s or item_description like %s or item_about like %s or item_category like %s''',[f'%{searchdata}%',f'%{searchdata}%',f'%{searchdata}%',f'%{searchdata}%'])
+        allitemsdata = cursor.fetchall()
+        cursor.close()
+        return render_template('index.html',allitemsdata=allitemsdata)
+    except Exception as e:
+        print("USER SEARCH ERROR:", e)
+        flash('Search failed')
+        return redirect(url_for('home'))
 @app.route('/adminsearch', methods=['POST'])
 def adminsearch():
     if not session.get('admin'):
@@ -992,4 +987,40 @@ def adminnewpassword(data):
             print(e)
             return jsonify({"message": "Password update failed"})
     return render_template('adminnewpassword.html', data=data)
+@app.route('/contactus', methods=['GET', 'POST'])
+def contactus():
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        subject = request.form['subject']
+        message = request.form['message']
+        try:
+            cursor = mydb.cursor(buffered=True)
+            cursor.execute('''INSERT INTO contact_messages(name,email,subject,message) VALUES(%s,%s,%s,%s)''',[name, email, subject, message])
+            mydb.commit()
+            print("CONTACT MESSAGE SAVED")
+            try:
+                print("SENDING CONTACT EMAIL...")
+                sendmail(to="moinuddinchistyshaik@gmail.com",subject=f"BUYROUTE Contact: {subject}",body=f"""New Contact Form Submission Name: {name} Email: {email} Subject: {subject} Message:{message}""")
+                print("CONTACT EMAIL SENT SUCCESSFULLY")
+            except Exception as mail_error:
+                print("CONTACT MAIL ERROR:", mail_error)
+            cursor.close()
+            flash('Message sent successfully')
+            return redirect(url_for('contactus'))
+        except Exception as e:
+            print("CONTACT FORM ERROR:", e)
+            flash('Could not send message')
+            return redirect(url_for('contactus'))
+    return render_template('contactus.html')
+@app.route('/viewcontacts')
+def viewcontacts():
+    if 'admin' not in session:
+        flash('Please login as admin')
+        return redirect(url_for('adminlogin'))
+    cursor = mydb.cursor(buffered=True)
+    cursor.execute('''SELECT * FROM contact_messages ORDER BY created_at DESC''')
+    contacts = cursor.fetchall()
+    cursor.close()
+    return render_template('viewcontacts.html',contacts=contacts)
 app.run(debug=True,use_reloader=True)

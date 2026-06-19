@@ -137,8 +137,23 @@
         <div style="margin-top:20px;">
           <a href="{{ url_for('home') }}" class="btn btn-secondary me-2">Back</a>
           <form method="post" action="{{url_for('buy_now')}}">
-                <input type="hidden" name="itemid" value="{{itemdata[0]}}">
-            <button class="btn-buy me-2">Buy Now</button>
+              <input type="hidden" name="itemid" value="{{itemdata[0]}}">
+
+              <label><strong>Quantity:</strong></label>
+
+              <input
+                  type="number"
+                  name="quantity"
+                  value="1"
+                  min="1"
+                  max="{{itemdata[5]}}"
+                  class="form-control mb-2"
+                  style="width:120px;"
+              >
+
+              <button type="submit" class="btn-buy me-2">
+                  Buy Now
+              </button>
           </form>
 
           <a href="{{url_for('addreview',itemid=itemdata[0])}}" 
